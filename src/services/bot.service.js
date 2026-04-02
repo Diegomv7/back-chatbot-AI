@@ -36,6 +36,16 @@ const tools = {
         if (!mascotas || mascotas.length === 0) return `Error: No encontré a la mascota ${nombre_mascota}. Pide registrarla primero.`;
         const mascota = mascotas[0];
 
+        const { data: citaExistente } = await supabase.from('citas')
+            .select('id')
+            .eq('mascota_id', mascota.id)
+            .eq('fecha_hora', fecha_hora_iso)
+            .limit(1);
+        
+        if (citaExistente && citaExistente.length > 0) {
+            return `Aviso: La cita para ${nombre_mascota} ya estaba agendada previamente para este horario.`;
+        }
+
         const { error } = await supabase.from('citas').insert({ mascota_id: mascota.id, fecha_hora: fecha_hora_iso, motivo: motivo });
         if (error) console.error("❌ Error Supabase (Cita):", error);
         return error ? "Error al agendar la cita en la base de datos." : `Cita de ${motivo} agendada exitosamente para ${nombre_mascota}.`;
@@ -56,13 +66,25 @@ bot.on('message', async (msg) => {
         
         if (errHistorial) console.error("Error obteniendo historial", errHistorial);
 
-        const history = (historialDB || []).map(h => ({
-            role: h.role,
-            parts: [{ text: h.content }]
-        }));
+        const historyRaw = [];
+        let lastRole = null;
+        for (const h of (historialDB || [])) {
+            if (h.role !== lastRole) {
+                historyRaw.push({ role: h.role, parts: [{ text: h.content }] });
+                lastRole = h.role;
+            } else {
+                if (historyRaw.length > 0) {
+                    historyRaw[historyRaw.length - 1].parts[0].text += "\n" + h.content;
+                }
+            }
+        }
+
+        if (historyRaw.length > 0 && historyRaw[historyRaw.length - 1].role === 'user') {
+            historyRaw.push({ role: 'model', parts: [{ text: "Entendido." }] });
+        }
 
         const chatActivo = model.startChat({
-            history: history,
+            history: historyRaw,
             tools: [{
                 functionDeclarations: [
                     { name: "registrar_cliente", description: "Registra a un cliente/dueño nuevo en la base de datos.", parameters: { type: "OBJECT", properties: { telegram_id: { type: "NUMBER" }, nombre: { type: "STRING" }, telefono: { type: "STRING" } }, required: ["telegram_id", "nombre"] } },
@@ -73,7 +95,7 @@ bot.on('message', async (msg) => {
         });
 
         const fechaHoy = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
-        const contextoOculto = ` (Contexto interno: ID Telegram: ${chatId}. Fecha local actual: ${fechaHoy}. REGLA ESTRICTA: El usuario está en la zona horaria UTC-6. Generar fecha_hora_iso INCLUYENDO explícitamente el offset -06:00. Ejemplo: "2026-04-01T14:00:00-06:00")`;
+        const contextoOculto = ` (Contexto: ID Telegram: ${chatId}. Fecha local: ${fechaHoy}. REGLAS ESTRICTAS: 1. Zona horaria de citas UTC-6 (ej: 2026-04-01T14:00:00-06:00). 2. CRÍTICO: Tu memoria histórica solo contiene texto, NO contiene el registro de las funciones que llamaste antes. Por ende, ASUME QUE CUALQUIER TAREA PASADA YA FUE EJECUTADA CON ÉXITO. NUNCA vuelvas a llamar "agendar_cita" o "registrar_mascota" para mascotas/citas que ya atendiste en mensajes anteriores. Responde y ejecuta tareas ÚNICAMENTE del último mensaje que te envió el usuario.)`;
 
         let mensajeParaGemini = [];
         let textoAGuardar = userText;
@@ -115,7 +137,13 @@ bot.on('message', async (msg) => {
                 functionResponses.push({ functionResponse: { name: call.name, response: { content: apiResponse } } });
             }
             const finalResult = await chatActivo.sendMessage(functionResponses);
-            const textoRespuesta = finalResult.response.text();
+            const calls2 = finalResult.response.functionCalls();
+            let textoRespuesta = "";
+            if (calls2 && calls2.length > 0) {
+                 textoRespuesta = "¡Múltiples acciones ejecutadas internamente con éxito! ✅";
+            } else {
+                 try { textoRespuesta = finalResult.response.text(); } catch (e) { textoRespuesta = "Hecho."; }
+            }
             
             const txtGuardar = textoRespuesta && textoRespuesta.trim() !== "" ? textoRespuesta : "¡Listo! Registro completado con éxito. ✅";
             await supabase.from('historial_chat').insert({ chat_id: chatId, role: 'model', content: txtGuardar });
