@@ -155,18 +155,18 @@ bot.on('message', async (msg) => {
             }
         } else {
             const textoDirecto = result.response.text();
-            const txtGuardar = textoDirecto && textoDirecto.trim() !== "" ? textoDirecto : "¡Entendido! 👍";
+            const txtGuardar = textoDirecto && textoDirecto.trim() !== "" ? textoDirecto : "¡Entendido!";
             
             await supabase.from('historial_chat').insert({ chat_id: chatId, role: 'model', content: txtGuardar });
 
             if (textoDirecto && textoDirecto.trim() !== "") {
                 bot.sendMessage(chatId, textoDirecto);
             } else {
-                bot.sendMessage(chatId, "¡Entendido! 👍");
+                bot.sendMessage(chatId, "¡Entendido!");
             }
         }
     } catch (error) {
         console.error("❌ Error:", error.message);
-        bot.sendMessage(chatId, "Tuve un pequeño error procesando tu mensaje. ¿Podrías intentar de nuevo? 🛠️");
+        bot.sendMessage(chatId, "Tuve un pequeño error procesando tu mensaje. ¿Podrías intentar de nuevo?");
     }
 });
