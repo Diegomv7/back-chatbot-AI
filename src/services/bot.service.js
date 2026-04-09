@@ -41,7 +41,7 @@ const tools = {
             .eq('mascota_id', mascota.id)
             .eq('fecha_hora', fecha_hora_iso)
             .limit(1);
-        
+
         if (citaExistente && citaExistente.length > 0) {
             return `Aviso: La cita para ${nombre_mascota} ya estaba agendada previamente para este horario.`;
         }
@@ -63,7 +63,7 @@ bot.on('message', async (msg) => {
             .eq('chat_id', chatId)
             .order('created_at', { ascending: true })
             .limit(20);
-        
+
         if (errHistorial) console.error("Error obteniendo historial", errHistorial);
 
         const historyRaw = [];
@@ -87,9 +87,21 @@ bot.on('message', async (msg) => {
             history: historyRaw,
             tools: [{
                 functionDeclarations: [
-                    { name: "registrar_cliente", description: "Registra a un cliente/dueño nuevo en la base de datos.", parameters: { type: "OBJECT", properties: { telegram_id: { type: "NUMBER" }, nombre: { type: "STRING" }, telefono: { type: "STRING" } }, required: ["telegram_id", "nombre"] } },
-                    { name: "registrar_mascota", description: "Registra una nueva mascota. Requiere el nombre de la mascota y la especie (ej. perro, gato).", parameters: { type: "OBJECT", properties: { telegram_id: { type: "NUMBER" }, nombre_mascota: { type: "STRING" }, especie: { type: "STRING" } }, required: ["telegram_id", "nombre_mascota", "especie"] } },
-                    { name: "agendar_cita", description: "Agenda una cita médica, baño o vacuna para la mascota.", parameters: { type: "OBJECT", properties: { telegram_id: { type: "NUMBER" }, nombre_mascota: { type: "STRING" }, motivo: { type: "STRING", description: "Ej: Baño, Consulta, Vacuna" }, fecha_hora_iso: { type: "STRING", description: "Fecha y hora en formato ISO 8601" } }, required: ["telegram_id", "nombre_mascota", "motivo", "fecha_hora_iso"] } }
+                    {
+                        name: "registrar_cliente",
+                        description: "[PASO 1] Ejecuta esto INMEDIATAMENTE DESPUÉS de que el usuario te escriba su nombre completo.",
+                        parameters: { type: "OBJECT", properties: { telegram_id: { type: "NUMBER" }, nombre: { type: "STRING" }, telefono: { type: "STRING" } }, required: ["telegram_id", "nombre"] }
+                    },
+                    {
+                        name: "registrar_mascota",
+                        description: "[PASO 2] Ejecuta esto SOLO si ya registraste al cliente Y el usuario ya te dijo el nombre de la mascota y su especie.",
+                        parameters: { type: "OBJECT", properties: { telegram_id: { type: "NUMBER" }, nombre_mascota: { type: "STRING" }, especie: { type: "STRING" } }, required: ["telegram_id", "nombre_mascota", "especie"] }
+                    },
+                    {
+                        name: "agendar_cita",
+                        description: "[PASO 3] Agenda la cita médica. NUNCA la uses si faltan datos. REQUIERE que el usuario te haya dado explícitamente el motivo, y la fecha y hora exacta.",
+                        parameters: { type: "OBJECT", properties: { telegram_id: { type: "NUMBER" }, nombre_mascota: { type: "STRING" }, motivo: { type: "STRING", description: "Ej: Baño, Consulta" }, fecha_hora_iso: { type: "STRING", description: "Fecha y hora en formato ISO 8601" } }, required: ["telegram_id", "nombre_mascota", "motivo", "fecha_hora_iso"] }
+                    }
                 ]
             }]
         });
@@ -107,7 +119,7 @@ bot.on('message', async (msg) => {
             const fileData = await fileRes.json();
             const audioRes = await fetch(`https://api.telegram.org/file/bot${token}/${fileData.result.file_path}`);
             if (!audioRes.ok) throw new Error("Error downloading voice note from Telegram.");
-            
+
             const arrayBuffer = await audioRes.arrayBuffer();
             textoAGuardar = "[Nota de voz enviada]";
             mensajeParaGemini = [
@@ -121,7 +133,7 @@ bot.on('message', async (msg) => {
         }
 
         const result = await chatActivo.sendMessage(mensajeParaGemini);
-        
+
         await supabase.from('historial_chat').insert({
             chat_id: chatId,
             role: 'user',
@@ -140,11 +152,11 @@ bot.on('message', async (msg) => {
             const calls2 = finalResult.response.functionCalls();
             let textoRespuesta = "";
             if (calls2 && calls2.length > 0) {
-                 textoRespuesta = "¡Múltiples acciones ejecutadas internamente con éxito! ✅";
+                textoRespuesta = "¡Múltiples acciones ejecutadas internamente con éxito! ✅";
             } else {
-                 try { textoRespuesta = finalResult.response.text(); } catch (e) { textoRespuesta = "Hecho."; }
+                try { textoRespuesta = finalResult.response.text(); } catch (e) { textoRespuesta = "Hecho."; }
             }
-            
+
             const txtGuardar = textoRespuesta && textoRespuesta.trim() !== "" ? textoRespuesta : "¡Listo! Registro completado con éxito. ✅";
             await supabase.from('historial_chat').insert({ chat_id: chatId, role: 'model', content: txtGuardar });
 
@@ -156,7 +168,7 @@ bot.on('message', async (msg) => {
         } else {
             const textoDirecto = result.response.text();
             const txtGuardar = textoDirecto && textoDirecto.trim() !== "" ? textoDirecto : "¡Entendido!";
-            
+
             await supabase.from('historial_chat').insert({ chat_id: chatId, role: 'model', content: txtGuardar });
 
             if (textoDirecto && textoDirecto.trim() !== "") {
