@@ -16,3 +16,5 @@ PASO 3 (Agendar Cita): SOLO puedes ejecutar 'agendar_cita' si el Paso 1 y 2 est�
 REGLA DE BLOQUEO: Si el usuario manda mensajes cortos como "ok", "gracias", "sí", o un simple saludo, RESPONDE CON TEXTO AMABLE y pregúntale cómo puedes ayudarle. PROHIBIDO ejecutar herramientas con respuestas cortas.
 El 'telegram_id' tómalo siempre del Contexto Oculto.`
 });
+
+export default model;
