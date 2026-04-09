@@ -49,7 +49,40 @@ const tools = {
         const { error } = await supabase.from('citas').insert({ mascota_id: mascota.id, fecha_hora: fecha_hora_iso, motivo: motivo });
         if (error) console.error("❌ Error Supabase (Cita):", error);
         return error ? "Error al agendar la cita en la base de datos." : `Cita de ${motivo} agendada exitosamente para ${nombre_mascota}.`;
-    }
+    },
+    consultar_disponibilidad: async (args) => {
+        const { fecha_iso } = args; // Formato esperado: YYYY-MM-DD
+
+        // Verificamos si es domingo (0 = Domingo en JavaScript) para definir el horario de atención
+        const fechaObj = new Date(fecha_iso + 'T12:00:00-06:00');
+        const esDomingo = fechaObj.getDay() === 0;
+        const horarioAtencion = esDomingo ? "10:00 AM a 2:00 PM" : "10:00 AM a 7:00 PM";
+
+        // Buscamos todas las citas desde las 00:00 hasta las 23:59 de ese día
+        const inicioDia = `${fecha_iso}T00:00:00-06:00`;
+        const finDia = `${fecha_iso}T23:59:59-06:00`;
+
+        const { data: citasDelDia, error } = await supabase
+            .from('citas')
+            .select('fecha_hora, estado')
+            .gte('fecha_hora', inicioDia)
+            .lte('fecha_hora', finDia)
+            .neq('estado', 'cancelada'); // No contamos las canceladas como ocupadas
+
+        if (error) return "Error al consultar la base de datos. Pide al usuario que espere.";
+
+        if (!citasDelDia || citasDelDia.length === 0) {
+            return `El día ${fecha_iso} está COMPLETAMENTE LIBRE. El horario de atención es de ${horarioAtencion}. Ofrécele cualquier hora dentro de este horario.`;
+        }
+
+        // Si hay citas, extraemos solo la hora para que la IA sepa cuáles no ofrecer
+        const horariosOcupados = citasDelDia.map(cita => {
+            return new Date(cita.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Mexico_City' });
+        });
+
+        return `Horario de atención: ${horarioAtencion}. ATENCIÓN: Los siguientes horarios ya están OCUPADOS para el ${fecha_iso}: ${horariosOcupados.join(', ')}. 
+        Dile al usuario qué horas ya no están disponibles y ofrécele las horas que sí estén libres dentro de ${horarioAtencion}.`;
+    },
 };
 
 bot.on('message', async (msg) => {
@@ -98,9 +131,14 @@ bot.on('message', async (msg) => {
                         parameters: { type: "OBJECT", properties: { telegram_id: { type: "NUMBER" }, nombre_mascota: { type: "STRING" }, especie: { type: "STRING" } }, required: ["telegram_id", "nombre_mascota", "especie"] }
                     },
                     {
+                        name: "consultar_disponibilidad",
+                        description: "[PASO 3] ÚSALA SIEMPRE ANTES DE AGENDAR. Si el usuario pide una cita para un día, consulta primero qué horas están libres.",
+                        parameters: { type: "OBJECT", properties: { fecha_iso: { type: "STRING", description: "Fecha a consultar en formato YYYY-MM-DD (Ej: 2026-04-12)" } }, required: ["fecha_iso"] }
+                    },
+                    {
                         name: "agendar_cita",
-                        description: "[PASO 3] Agenda la cita médica. NUNCA la uses si faltan datos. REQUIERE que el usuario te haya dado explícitamente el motivo, y la fecha y hora exacta.",
-                        parameters: { type: "OBJECT", properties: { telegram_id: { type: "NUMBER" }, nombre_mascota: { type: "STRING" }, motivo: { type: "STRING", description: "Ej: Baño, Consulta" }, fecha_hora_iso: { type: "STRING", description: "Fecha y hora en formato ISO 8601" } }, required: ["telegram_id", "nombre_mascota", "motivo", "fecha_hora_iso"] }
+                        description: "[PASO 4] Agenda la cita. SOLO úsala si el usuario eligió una hora que ya verificaste que está LIBRE en el Paso 3.",
+                        parameters: { type: "OBJECT", properties: { telegram_id: { type: "NUMBER" }, nombre_mascota: { type: "STRING" }, motivo: { type: "STRING" }, fecha_hora_iso: { type: "STRING" } }, required: ["telegram_id", "nombre_mascota", "motivo", "fecha_hora_iso"] }
                     }
                 ]
             }]
