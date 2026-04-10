@@ -32,7 +32,11 @@ const tools = {
 
         // --- 🛡️ INICIO DEL GUARDIA DE SEGURIDAD (Validación de Horario) ---
         const fechaCitaObj = new Date(fecha_hora_iso);
-        const horaCita = fechaCitaObj.getHours();
+        
+        // PARCHE DE ZONA HORARIA: Forzamos a que lea la hora de México, no la del servidor en Londres
+        const horaLocalMX = fechaCitaObj.toLocaleTimeString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Mexico_City' });
+        const horaCita = parseInt(horaLocalMX, 10);
+        
         const diaCita = fechaCitaObj.getDay(); // En JavaScript, 0 es Domingo
 
         // 1. Validamos si es Domingo (Horario permitido: 10 AM a 2 PM)
@@ -215,12 +219,11 @@ bot.on('message', async (msg) => {
                 functionResponses.push({ functionResponse: { name: call.name, response: { content: apiResponse } } });
             }
             const finalResult = await chatActivo.sendMessage(functionResponses);
-            const calls2 = finalResult.response.functionCalls();
             let textoRespuesta = "";
-            if (calls2 && calls2.length > 0) {
-                textoRespuesta = "¡Múltiples acciones ejecutadas internamente con éxito! ✅";
-            } else {
-                try { textoRespuesta = finalResult.response.text(); } catch (e) { textoRespuesta = "Hecho."; }
+            try { 
+                textoRespuesta = finalResult.response.text(); 
+            } catch (e) { 
+                textoRespuesta = "¡Listo! Registros actualizados. ✅"; 
             }
 
             const txtGuardar = textoRespuesta && textoRespuesta.trim() !== "" ? textoRespuesta : "¡Listo! Registro completado con éxito. ✅";
