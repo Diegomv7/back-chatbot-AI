@@ -29,6 +29,25 @@ const tools = {
     },
     agendar_cita: async (args) => {
         const { telegram_id, nombre_mascota, motivo, fecha_hora_iso } = args;
+
+        // --- 🛡️ INICIO DEL GUARDIA DE SEGURIDAD (Validación de Horario) ---
+        const fechaCitaObj = new Date(fecha_hora_iso);
+        const horaCita = fechaCitaObj.getHours();
+        const diaCita = fechaCitaObj.getDay(); // En JavaScript, 0 es Domingo
+
+        // 1. Validamos si es Domingo (Horario permitido: 10 AM a 2 PM)
+        if (diaCita === 0) {
+            if (horaCita < 10 || horaCita >= 14) {
+                return "ERROR CRÍTICO: El horario los domingos es solo de 10:00 AM a 2:00 PM. Dile al usuario que la clínica está cerrada a la hora que pidió y ofrécele un horario válido.";
+            }
+        } else {
+            // 2. Validamos de Lunes a Sábado (Horario permitido: 10 AM a 8 PM)
+            if (horaCita < 10 || horaCita >= 20) {
+                return "ERROR CRÍTICO: La clínica está cerrada a esa hora. Nuestro horario de Lunes a Sábado es de 10:00 AM a 8:00 PM. Dile al usuario que elija una hora dentro del horario de atención.";
+            }
+        }
+        // --- FIN DEL GUARDIA ---
+
         const { data: dueno } = await supabase.from('duenos').select('id').eq('telegram_id', telegram_id).maybeSingle();
         if (!dueno) return "Error: Dueño no encontrado.";
 
@@ -138,7 +157,16 @@ bot.on('message', async (msg) => {
                     {
                         name: "agendar_cita",
                         description: "[PASO 4] Agenda la cita. SOLO úsala si el usuario eligió una hora que ya verificaste que está LIBRE en el Paso 3.",
-                        parameters: { type: "OBJECT", properties: { telegram_id: { type: "NUMBER" }, nombre_mascota: { type: "STRING" }, motivo: { type: "STRING" }, fecha_hora_iso: { type: "STRING" } }, required: ["telegram_id", "nombre_mascota", "motivo", "fecha_hora_iso"] }
+                        parameters: {
+                            type: "OBJECT",
+                            properties: {
+                                telegram_id: { type: "NUMBER" },
+                                nombre_mascota: { type: "STRING" },
+                                motivo: { type: "STRING", description: "DEBE ser dicho explícitamente por el usuario. NO lo inventes. Ej: Baño, Consulta, Vacuna." },
+                                fecha_hora_iso: { type: "STRING" }
+                            },
+                            required: ["telegram_id", "nombre_mascota", "motivo", "fecha_hora_iso"]
+                        }
                     }
                 ]
             }]
