@@ -32,11 +32,11 @@ const tools = {
 
         // --- 🛡️ INICIO DEL GUARDIA DE SEGURIDAD (Validación de Horario) ---
         const fechaCitaObj = new Date(fecha_hora_iso);
-        
+
         // PARCHE DE ZONA HORARIA: Forzamos a que lea la hora de México, no la del servidor en Londres
         const horaLocalMX = fechaCitaObj.toLocaleTimeString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Mexico_City' });
         const horaCita = parseInt(horaLocalMX, 10);
-        
+
         const diaCita = fechaCitaObj.getDay(); // En JavaScript, 0 es Domingo
 
         // 1. Validamos si es Domingo (Horario permitido: 10 AM a 2 PM)
@@ -160,7 +160,7 @@ bot.on('message', async (msg) => {
                     },
                     {
                         name: "agendar_cita",
-                        description: "[PASO 4] Agenda la cita. SOLO úsala si el usuario eligió una hora que ya verificaste que está LIBRE en el Paso 3.",
+                        description: "[PASO 4] Agenda la cita. Requiere una hora exacta. Si el usuario dice 'después de la otra', calcula la hora final (Baño +60min, Consulta +30min) y úsala.",
                         parameters: {
                             type: "OBJECT",
                             properties: {
@@ -220,10 +220,10 @@ bot.on('message', async (msg) => {
             }
             const finalResult = await chatActivo.sendMessage(functionResponses);
             let textoRespuesta = "";
-            try { 
-                textoRespuesta = finalResult.response.text(); 
-            } catch (e) { 
-                textoRespuesta = "¡Listo! Registros actualizados. ✅"; 
+            try {
+                textoRespuesta = finalResult.response.text();
+            } catch (e) {
+                textoRespuesta = "¡Listo! Registros actualizados. ✅";
             }
 
             const txtGuardar = textoRespuesta && textoRespuesta.trim() !== "" ? textoRespuesta : "¡Listo! Registro completado con éxito. ✅";
