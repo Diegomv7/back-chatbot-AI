@@ -50,7 +50,13 @@ const getToolsForClinic = (clinic_id) => ({
     agendar_cita: async (args) => {
         const { telegram_id, nombre_mascota, motivo, fecha_hora_iso } = args;
 
-        const fechaCitaObj = new Date(fecha_hora_iso);
+        // --- 🛡️ PARCHE DE ZONA HORARIA ---
+        // Si la IA manda "2026-04-13T10:00:00" (19 chars) o "2026-04-13T10:00" (16 chars), le pegamos el -06:00
+        let fechaHoraSegura = fecha_hora_iso;
+        if (fechaHoraSegura.length === 16) fechaHoraSegura += ':00-06:00';
+        else if (fechaHoraSegura.length === 19) fechaHoraSegura += '-06:00';
+
+        const fechaCitaObj = new Date(fechaHoraSegura);
         const horaLocalMX = fechaCitaObj.toLocaleTimeString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Mexico_City' });
         const horaCita = parseInt(horaLocalMX, 10);
         const diaCita = fechaCitaObj.getDay();
@@ -69,14 +75,14 @@ const getToolsForClinic = (clinic_id) => ({
         const mascota = mascotas[0];
 
         const { data: citaExistente } = await supabase.from('appointments')
-            .select('id').eq('pet_id', mascota.id).eq('clinic_id', clinic_id).eq('appointment_date', fecha_hora_iso).limit(1);
+            .select('id').eq('pet_id', mascota.id).eq('clinic_id', clinic_id).eq('appointment_date', fechaHoraSegura).limit(1);
         if (citaExistente && citaExistente.length > 0) return `Aviso: La cita para ${nombre_mascota} ya estaba agendada previamente para este horario.`;
 
-        // Guardamos en appointments
+        // Guardamos en appointments usando la fechaHoraSegura
         const { error } = await supabase.from('appointments').insert({
             clinic_id: clinic_id,
             pet_id: mascota.id,
-            appointment_date: fecha_hora_iso,
+            appointment_date: fechaHoraSegura, // <-- ¡Este fue el cambio clave para la DB!
             reason: motivo
         });
         if (error) console.error("❌ Error Supabase (Appointment):", error);
@@ -209,7 +215,7 @@ bot.on('message', async (msg) => {
                                 telegram_id: { type: "NUMBER" },
                                 nombre_mascota: { type: "STRING" },
                                 motivo: { type: "STRING", description: "DEBE ser explícito (Ej: Baño, Consulta, Vacuna)." },
-                                fecha_hora_iso: { type: "STRING" }
+                                fecha_hora_iso: { type: "STRING", description: "Formato ESTRICTO con zona horaria: YYYY-MM-DDTHH:mm:00-06:00" }
                             },
                             required: ["telegram_id", "nombre_mascota", "motivo", "fecha_hora_iso"]
                         }
