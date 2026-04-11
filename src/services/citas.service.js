@@ -2,12 +2,12 @@ import supabase from '../config/supabase.js';
 
 export const obtenerCitas = async () => {
     const { data, error } = await supabase
-        .from('citas')
+        .from('appointments')
         .select(`
-            id, fecha_hora, motivo, estado,
-            mascotas ( nombre, especie, duenos ( nombre, telefono ) )
+            id, appointment_date, reason, status,
+            pets ( name, species, owners ( full_name, phone ) )
         `)
-        .order('fecha_hora', { ascending: true });
+        .order('appointment_date', { ascending: true });
 
     if (error) {
         throw new Error(error.message);
@@ -17,8 +17,8 @@ export const obtenerCitas = async () => {
 
 export const cambiarEstadoCita = async (id, nuevoEstado) => {
     const { data, error } = await supabase
-        .from('citas')
-        .update({ estado: nuevoEstado })
+        .from('appointments')
+        .update({ status: nuevoEstado })
         .eq('id', id)
         .select();
 
